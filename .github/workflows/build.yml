@@ -46,10 +46,10 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v1
+        with:
+          # Checkout into a fixed path to avoid import path problems on go < 1.11
+          path: ./src/github.com/jonntd/gclone
 
-      - name: Unshallow
-        run: git fetch --prune --unshallow
-        
       - name: Install Go
         uses: actions/setup-go@v1
         with:
@@ -134,7 +134,7 @@ jobs:
         uses: actions/checkout@v1
         with:
           # Checkout into a fixed path to avoid import path problems on go < 1.11
-          path: ./src/github.com/rclone/rclone
+          path: ./src/github.com/jonntd/gclone
 
       - name: Set environment variables
         shell: bash
@@ -159,7 +159,7 @@ jobs:
       - name: Build rclone
         run: |
           docker pull golang
-          docker run --rm -v "$PWD":/usr/src/rclone -w /usr/src/rclone golang go build -mod=vendor -v
+          docker run --rm -v "$PWD":/usr/src/gclone -w /usr/src/gclone golang go build -mod=vendor -v
       - name: Upload artifacts
         run: |
           make circleci_upload
