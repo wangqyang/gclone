@@ -60,7 +60,6 @@ const (
 // Globals
 var (
 	// Description of how to auth for this app for a business account
-
 	oauthEndpoint = &oauth2.Endpoint{
 		AuthURL:  authEndpoint + "/common/oauth2/v2.0/authorize",
 		TokenURL: authEndpoint + "/common/oauth2/v2.0/token",
@@ -71,7 +70,10 @@ var (
 	}
 
 	oauthConfig = &oauth2.Config{
-
+		// Endpoint: oauth2.Endpoint{
+		// 	AuthURL:  "https://login.microsoftonline.com/common/oauth2/v2.0/authorize",
+		// 	TokenURL: "https://login.microsoftonline.com/common/oauth2/v2.0/token",
+		// },
 		Scopes:       []string{"Files.Read", "Files.ReadWrite", "Files.Read.All", "Files.ReadWrite.All", "offline_access", "Sites.Read.All"},
 		ClientID:     rcloneClientID,
 		ClientSecret: obscure.MustReveal(rcloneEncryptedClientSecret),
@@ -90,7 +92,6 @@ func init() {
 		Description: "Microsoft OneDrive",
 		NewFs:       NewFs,
 		Config: func(name string, m configmap.Mapper) {
-
 			opt := new(Options)
 			err := configstruct.Set(m, opt)
 			if err != nil {
@@ -104,7 +105,6 @@ func init() {
 				graphURL = graphAPIEndpoint21V + "/v1.0"
 				oauthConfig.Endpoint = *oauthEndpointV21
 			}
-
 			ctx := context.TODO()
 			err = oauthutil.Config("onedrive", name, m, oauthConfig, nil)
 			if err != nil {
@@ -273,17 +273,15 @@ func init() {
 			config.SaveConfig()
 		},
 		Options: []fs.Option{{
+			Name:    "is_21vianet_version",
+			Default: false,
+			Help:    "OneDrive operated by 21Vianet (世纪互联 china0sen基于ShadeShady修改).",
+		}, {
 			Name: config.ConfigClientID,
 			Help: "Microsoft App Client Id\nLeave blank normally.",
 		}, {
 			Name: config.ConfigClientSecret,
 			Help: "Microsoft App Client Secret\nLeave blank normally.",
-
-		}, {
-			Name:    "is_21vianet_version",
-			Default: false,
-			Help:    "OneDrive operated by 21Vianet (世纪互联).",
-
 		}, {
 			Name: "chunk_size",
 			Help: `Chunk size to upload files with - must be multiple of 320k (327,680 bytes).
@@ -443,7 +441,7 @@ func (f *Fs) Features() *fs.Features {
 	return f.features
 }
 
-// parsePath parses an one drive 'url'
+// parsePath parses a one drive 'url'
 func parsePath(path string) (root string) {
 	root = strings.Trim(path, "/")
 	return
@@ -639,7 +637,6 @@ func NewFs(name, root string, m configmap.Mapper) (fs.Fs, error) {
 	if opt.DriveID == "" || opt.DriveType == "" {
 		return nil, errors.New("unable to get drive_id and drive_type - if you are upgrading from older versions of rclone, please run `rclone config` and re-configure this backend")
 	}
-
 	rootURL := graphAPIEndpoint + "/v1.0" + "/drives/" + opt.DriveID
 	oauthConfig.Endpoint = *oauthEndpoint
 	if opt.Is21Vianet {
@@ -1368,7 +1365,7 @@ func (f *Fs) Hashes() hash.Set {
 	return hash.Set(QuickXorHashType)
 }
 
-// PublicLink returns a link for downloading without accout.
+// PublicLink returns a link for downloading without account.
 func (f *Fs) PublicLink(ctx context.Context, remote string) (link string, err error) {
 	info, _, err := f.readMetaDataForPath(ctx, f.rootPath(remote))
 	if err != nil {
@@ -1922,8 +1919,8 @@ func newOptsCall(normalizedID string, method string, route string) (opts rest.Op
 func parseNormalizedID(ID string) (string, string, string) {
 	if strings.Index(ID, "#") >= 0 {
 		s := strings.Split(ID, "#")
+		//return s[1], s[0], graphAPIEndpoint + "/drives"
 		return s[1], "", ""
-
 	}
 	return ID, "", ""
 }
