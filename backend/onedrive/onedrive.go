@@ -42,18 +42,19 @@ const (
 	minSleep                    = 10 * time.Millisecond
 	maxSleep                    = 2 * time.Second
 	decayConstant               = 2 // bigger for slower decay, exponential
-	graphAPIEndpoint            = "https://graph.microsoft.com"
-	authEndpoint                = "https://login.microsoftonline.com"
-	graphAPIEndpoint21V         = "https://microsoftgraph.chinacloudapi.cn"
-	authEndpoint21V             = "https://login.chinacloudapi.cn"
-
-	configDriveID               = "drive_id"
-	configDriveType             = "drive_type"
-	driveTypePersonal           = "personal"
-	driveTypeBusiness           = "business"
-	driveTypeSharepoint         = "documentLibrary"
-	defaultChunkSize            = 10 * fs.MebiByte
-	chunkSizeMultiple           = 320 * fs.KibiByte
+	//graphURL                    = "https://graph.microsoft.com/v1.0"
+	graphAPIEndpoint    = "https://graph.microsoft.com"
+	authEndpoint        = "https://login.microsoftonline.com"
+	graphAPIEndpoint21V = "https://microsoftgraph.chinacloudapi.cn"
+	authEndpoint21V     = "https://login.chinacloudapi.cn"
+	configDriveID       = "drive_id"
+	configSiteID        = "site_id"
+	configDriveType     = "drive_type"
+	driveTypePersonal   = "personal"
+	driveTypeBusiness   = "business"
+	driveTypeSharepoint = "documentLibrary"
+	defaultChunkSize    = 10 * fs.MebiByte
+	chunkSizeMultiple   = 320 * fs.KibiByte
 )
 
 // Globals
@@ -105,7 +106,7 @@ func init() {
 			}
 
 			ctx := context.TODO()
-			err = oauthutil.Config("onedrive", name, m, oauthConfig)
+			err = oauthutil.Config("onedrive", name, m, oauthConfig, nil)
 			if err != nil {
 				log.Fatalf("Failed to configure token: %v", err)
 				return
@@ -210,6 +211,28 @@ func init() {
 					log.Fatalf("Failed to query available drives: %v", err)
 				}
 
+				// Also call /me/drive as sometimes /me/drives doesn't return it #4068
+				if opts.Path == "/me/drives" {
+					opts.Path = "/me/drive"
+					meDrive := driveResource{}
+					_, err := srv.CallJSON(ctx, &opts, nil, &meDrive)
+					if err != nil {
+						log.Fatalf("Failed to query available drives: %v", err)
+					}
+					found := false
+					for _, drive := range drives.Drives {
+						if drive.DriveID == meDrive.DriveID {
+							found = true
+							break
+						}
+					}
+					// add the me drive if not found already
+					if !found {
+						fs.Debugf(nil, "Adding %v to drives list from /me/drive", meDrive)
+						drives.Drives = append(drives.Drives, meDrive)
+					}
+				}
+
 				if len(drives.Drives) == 0 {
 					log.Fatalf("No drives found")
 				} else {
@@ -238,6 +261,13 @@ func init() {
 				log.Fatalf("Cancelled by user")
 			}
 
+			if rootItem.ParentReference.DriveType == "documentLibrary" {
+				if opt.Is21Vianet {
+					m.Set(configSiteID, siteID)
+				}
+
+			}
+
 			m.Set(configDriveID, finalDriveID)
 			m.Set(configDriveType, rootItem.ParentReference.DriveType)
 			config.SaveConfig()
@@ -258,13 +288,19 @@ func init() {
 			Name: "chunk_size",
 			Help: `Chunk size to upload files with - must be multiple of 320k (327,680 bytes).
 
-Above this size files will be chunked - must be multiple of 320k (327,680 bytes). Note
-that the chunks will be buffered into memory.`,
+Above this size files will be chunked - must be multiple of 320k (327,680 bytes) and
+should not exceed 250M (262,144,000 bytes) else you may encounter \"Microsoft.SharePoint.Client.InvalidClientQueryException: The request message is too big.\"
+Note that the chunks will be buffered into memory.`,
 			Default:  defaultChunkSize,
 			Advanced: true,
 		}, {
 			Name:     "drive_id",
 			Help:     "The ID of the drive to use",
+			Default:  "",
+			Advanced: true,
+		}, {
+			Name:     "site_id",
+			Help:     "The ID of the site to use",
 			Default:  "",
 			Advanced: true,
 		}, {
@@ -282,6 +318,16 @@ behaviour may also prevent you from deleting them.  If you want to
 delete OneNote files or otherwise want them to show up in directory
 listing, set this option.`,
 			Default:  false,
+			Advanced: true,
+		}, {
+			Name:    "server_side_across_configs",
+			Default: false,
+			Help: `Allow server side operations (eg copy) to work across different onedrive configs.
+
+This can be useful if you wish to do a server side copy between two
+different Onedrives.  Note that this isn't enabled by default
+because it isn't easy to tell if it will work between any two
+configurations.`,
 			Advanced: true,
 		}, {
 			Name:     config.ConfigEncoding,
@@ -335,12 +381,14 @@ listing, set this option.`,
 
 // Options defines the configuration for this backend
 type Options struct {
-	Is21Vianet         bool          `config:"is_21vianet_version"`
-	ChunkSize          fs.SizeSuffix        `config:"chunk_size"`
-	DriveID            string               `config:"drive_id"`
-	DriveType          string               `config:"drive_type"`
-	ExposeOneNoteFiles bool                 `config:"expose_onenote_files"`
-	Enc                encoder.MultiEncoder `config:"encoding"`
+	Is21Vianet              bool                 `config:"is_21vianet_version"`
+	ChunkSize               fs.SizeSuffix        `config:"chunk_size"`
+	DriveID                 string               `config:"drive_id"`
+	SiteID                  string               `config:"site_id"`
+	DriveType               string               `config:"drive_type"`
+	ExposeOneNoteFiles      bool                 `config:"expose_onenote_files"`
+	ServerSideAcrossConfigs bool                 `config:"server_side_across_configs"`
+	Enc                     encoder.MultiEncoder `config:"encoding"`
 }
 
 // Fs represents a remote one drive
@@ -435,6 +483,8 @@ func shouldRetry(resp *http.Response, err error) (bool, error) {
 					fs.Debugf(nil, "Too many requests. Trying again in %d seconds.", retryAfter)
 				}
 			}
+		case 507: // Insufficient Storage
+			return false, fserrors.FatalError(err)
 		}
 	}
 	return retry || fserrors.ShouldRetry(err) || fserrors.ShouldRetryHTTP(resp, retryErrorCodes), err
@@ -594,6 +644,9 @@ func NewFs(name, root string, m configmap.Mapper) (fs.Fs, error) {
 	oauthConfig.Endpoint = *oauthEndpoint
 	if opt.Is21Vianet {
 		rootURL = graphAPIEndpoint21V + "/v1.0" + "/me/drive"
+		if opt.DriveType == "documentLibrary" {
+			rootURL = graphAPIEndpoint21V + "/v1.0" + "/sites/" + opt.SiteID + "/drive"
+		}
 		oauthConfig.Endpoint = *oauthEndpointV21
 	}
 
@@ -609,13 +662,15 @@ func NewFs(name, root string, m configmap.Mapper) (fs.Fs, error) {
 		opt:       *opt,
 		driveID:   opt.DriveID,
 		driveType: opt.DriveType,
-		srv:       rest.NewClient(oAuthClient).SetRoot(rootURL),
-		pacer:     fs.NewPacer(pacer.NewDefault(pacer.MinSleep(minSleep), pacer.MaxSleep(maxSleep), pacer.DecayConstant(decayConstant))),
+		//srv:       rest.NewClient(oAuthClient).SetRoot(graphURL + "/drives/" + opt.DriveID),
+		srv:   rest.NewClient(oAuthClient).SetRoot(rootURL),
+		pacer: fs.NewPacer(pacer.NewDefault(pacer.MinSleep(minSleep), pacer.MaxSleep(maxSleep), pacer.DecayConstant(decayConstant))),
 	}
 	f.features = (&fs.Features{
 		CaseInsensitive:         true,
 		ReadMimeType:            true,
 		CanHaveEmptyDirectories: true,
+		ServerSideAcrossConfigs: opt.ServerSideAcrossConfigs,
 	}).Fill(f)
 	f.srv.SetErrorHandler(errorHandler)
 
@@ -1028,10 +1083,13 @@ func (f *Fs) Copy(ctx context.Context, src fs.Object, remote string) (fs.Object,
 		return nil, err
 	}
 
-	srcPath := srcObj.rootPath()
-	dstPath := f.rootPath(remote)
-	if strings.ToLower(srcPath) == strings.ToLower(dstPath) {
-		return nil, errors.Errorf("can't copy %q -> %q as are same name when lowercase", srcPath, dstPath)
+	// Check we aren't overwriting a file on the same remote
+	if srcObj.fs == f {
+		srcPath := srcObj.rootPath()
+		dstPath := f.rootPath(remote)
+		if strings.ToLower(srcPath) == strings.ToLower(dstPath) {
+			return nil, errors.Errorf("can't copy %q -> %q as are same name when lowercase", srcPath, dstPath)
+		}
 	}
 
 	// Create temporary object
@@ -1612,7 +1670,7 @@ func (o *Object) getPosition(ctx context.Context, url string) (pos int64, err er
 }
 
 // uploadFragment uploads a part
-func (o *Object) uploadFragment(ctx context.Context, url string, start int64, totalSize int64, chunk io.ReadSeeker, chunkSize int64) (info *api.Item, err error) {
+func (o *Object) uploadFragment(ctx context.Context, url string, start int64, totalSize int64, chunk io.ReadSeeker, chunkSize int64, options ...fs.OpenOption) (info *api.Item, err error) {
 	//	var response api.UploadFragmentResponse
 	var resp *http.Response
 	var body []byte
@@ -1625,6 +1683,7 @@ func (o *Object) uploadFragment(ctx context.Context, url string, start int64, to
 			ContentLength: &toSend,
 			ContentRange:  fmt.Sprintf("bytes %d-%d/%d", start+skip, start+chunkSize-1, totalSize),
 			Body:          chunk,
+			Options:       options,
 		}
 		_, _ = chunk.Seek(skip, io.SeekStart)
 		resp, err = o.fs.srv.Call(ctx, &opts)
@@ -1682,7 +1741,7 @@ func (o *Object) cancelUploadSession(ctx context.Context, url string) (err error
 }
 
 // uploadMultipart uploads a file using multipart upload
-func (o *Object) uploadMultipart(ctx context.Context, in io.Reader, size int64, modTime time.Time) (info *api.Item, err error) {
+func (o *Object) uploadMultipart(ctx context.Context, in io.Reader, size int64, modTime time.Time, options ...fs.OpenOption) (info *api.Item, err error) {
 	if size <= 0 {
 		return nil, errors.New("unknown-sized upload not supported")
 	}
@@ -1733,7 +1792,7 @@ func (o *Object) uploadMultipart(ctx context.Context, in io.Reader, size int64, 
 		}
 		seg := readers.NewRepeatableReader(io.LimitReader(in, n))
 		fs.Debugf(o, "Uploading segment %d/%d size %d", position, size, n)
-		info, err = o.uploadFragment(ctx, uploadURL, position, size, seg, n)
+		info, err = o.uploadFragment(ctx, uploadURL, position, size, seg, n, options...)
 		if err != nil {
 			return nil, err
 		}
@@ -1746,7 +1805,7 @@ func (o *Object) uploadMultipart(ctx context.Context, in io.Reader, size int64, 
 
 // Update the content of a remote file within 4MB size in one single request
 // This function will set modtime after uploading, which will create a new version for the remote file
-func (o *Object) uploadSinglepart(ctx context.Context, in io.Reader, size int64, modTime time.Time) (info *api.Item, err error) {
+func (o *Object) uploadSinglepart(ctx context.Context, in io.Reader, size int64, modTime time.Time, options ...fs.OpenOption) (info *api.Item, err error) {
 	if size < 0 || size > int64(fs.SizeSuffix(4*1024*1024)) {
 		return nil, errors.New("size passed into uploadSinglepart must be >= 0 and <= 4MiB")
 	}
@@ -1763,6 +1822,7 @@ func (o *Object) uploadSinglepart(ctx context.Context, in io.Reader, size int64,
 			Path:          "/" + drive + "/items/" + trueDirID + ":/" + rest.URLPathEscape(o.fs.opt.Enc.FromStandardName(leaf)) + ":/content",
 			ContentLength: &size,
 			Body:          in,
+			Options:       options,
 		}
 	} else {
 		opts = rest.Opts{
@@ -1770,6 +1830,7 @@ func (o *Object) uploadSinglepart(ctx context.Context, in io.Reader, size int64,
 			Path:          "/root:/" + rest.URLPathEscape(o.srvPath()) + ":/content",
 			ContentLength: &size,
 			Body:          in,
+			Options:       options,
 		}
 	}
 
@@ -1811,9 +1872,9 @@ func (o *Object) Update(ctx context.Context, in io.Reader, src fs.ObjectInfo, op
 
 	var info *api.Item
 	if size > 0 {
-		info, err = o.uploadMultipart(ctx, in, size, modTime)
+		info, err = o.uploadMultipart(ctx, in, size, modTime, options...)
 	} else if size == 0 {
-		info, err = o.uploadSinglepart(ctx, in, size, modTime)
+		info, err = o.uploadSinglepart(ctx, in, size, modTime, options...)
 	} else {
 		return errors.New("unknown-sized upload not supported")
 	}
