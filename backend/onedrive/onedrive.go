@@ -48,7 +48,7 @@ const (
 	authEndpoint21V             = "https://login.chinacloudapi.cn"
 
 	configDriveID               = "drive_id"
-	configSiteID       	    = "site_id"
+	configSiteID                = "site_id"
 	configDriveType             = "drive_type"
 	driveTypePersonal           = "personal"
 	driveTypeBusiness           = "business"
@@ -106,7 +106,7 @@ func init() {
 			}
 
 			ctx := context.TODO()
-			err = oauthutil.Config("onedrive", name, m, oauthConfig, nil)
+			err = oauthutil.Config("onedrive", name, m, oauthConfig)
 			if err != nil {
 				log.Fatalf("Failed to configure token: %v", err)
 				return
