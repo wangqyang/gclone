@@ -106,7 +106,7 @@ func init() {
 			}
 
 			ctx := context.TODO()
-			err = oauthutil.Config("onedrive", name, m, oauthConfig)
+			err = oauthutil.Config("onedrive", name, m, oauthConfig, nil)
 			if err != nil {
 				log.Fatalf("Failed to configure token: %v", err)
 				return
@@ -1081,10 +1081,13 @@ func (f *Fs) Copy(ctx context.Context, src fs.Object, remote string) (fs.Object,
 		return nil, err
 	}
 
-	srcPath := srcObj.rootPath()
-	dstPath := f.rootPath(remote)
-	if strings.ToLower(srcPath) == strings.ToLower(dstPath) {
-		return nil, errors.Errorf("can't copy %q -> %q as are same name when lowercase", srcPath, dstPath)
+	// Check we aren't overwriting a file on the same remote
+	if srcObj.fs == f {
+		srcPath := srcObj.rootPath()
+		dstPath := f.rootPath(remote)
+		if strings.ToLower(srcPath) == strings.ToLower(dstPath) {
+			return nil, errors.Errorf("can't copy %q -> %q as are same name when lowercase", srcPath, dstPath)
+		}
 	}
 
 	// Create temporary object
