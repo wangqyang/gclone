@@ -42,24 +42,25 @@ const (
 	minSleep                    = 10 * time.Millisecond
 	maxSleep                    = 2 * time.Second
 	decayConstant               = 2 // bigger for slower decay, exponential
-	//graphURL                    = "https://graph.microsoft.com/v1.0"
-	graphAPIEndpoint    = "https://graph.microsoft.com"
-	authEndpoint        = "https://login.microsoftonline.com"
-	graphAPIEndpoint21V = "https://microsoftgraph.chinacloudapi.cn"
-	authEndpoint21V     = "https://login.chinacloudapi.cn"
-	configDriveID       = "drive_id"
-	configSiteID        = "site_id"
-	configDriveType     = "drive_type"
-	driveTypePersonal   = "personal"
-	driveTypeBusiness   = "business"
-	driveTypeSharepoint = "documentLibrary"
-	defaultChunkSize    = 10 * fs.MebiByte
-	chunkSizeMultiple   = 320 * fs.KibiByte
+	graphAPIEndpoint            = "https://graph.microsoft.com"
+	authEndpoint                = "https://login.microsoftonline.com"
+	graphAPIEndpoint21V         = "https://microsoftgraph.chinacloudapi.cn"
+	authEndpoint21V             = "https://login.chinacloudapi.cn"
+
+	configDriveID               = "drive_id"
+	configSiteID       	    = "site_id"
+	configDriveType             = "drive_type"
+	driveTypePersonal           = "personal"
+	driveTypeBusiness           = "business"
+	driveTypeSharepoint         = "documentLibrary"
+	defaultChunkSize            = 10 * fs.MebiByte
+	chunkSizeMultiple           = 320 * fs.KibiByte
 )
 
 // Globals
 var (
 	// Description of how to auth for this app for a business account
+
 	oauthEndpoint = &oauth2.Endpoint{
 		AuthURL:  authEndpoint + "/common/oauth2/v2.0/authorize",
 		TokenURL: authEndpoint + "/common/oauth2/v2.0/token",
@@ -70,10 +71,7 @@ var (
 	}
 
 	oauthConfig = &oauth2.Config{
-		// Endpoint: oauth2.Endpoint{
-		// 	AuthURL:  "https://login.microsoftonline.com/common/oauth2/v2.0/authorize",
-		// 	TokenURL: "https://login.microsoftonline.com/common/oauth2/v2.0/token",
-		// },
+
 		Scopes:       []string{"Files.Read", "Files.ReadWrite", "Files.Read.All", "Files.ReadWrite.All", "offline_access", "Sites.Read.All"},
 		ClientID:     rcloneClientID,
 		ClientSecret: obscure.MustReveal(rcloneEncryptedClientSecret),
@@ -92,6 +90,7 @@ func init() {
 		Description: "Microsoft OneDrive",
 		NewFs:       NewFs,
 		Config: func(name string, m configmap.Mapper) {
+
 			opt := new(Options)
 			err := configstruct.Set(m, opt)
 			if err != nil {
@@ -105,6 +104,7 @@ func init() {
 				graphURL = graphAPIEndpoint21V + "/v1.0"
 				oauthConfig.Endpoint = *oauthEndpointV21
 			}
+
 			ctx := context.TODO()
 			err = oauthutil.Config("onedrive", name, m, oauthConfig, nil)
 			if err != nil {
@@ -273,22 +273,23 @@ func init() {
 			config.SaveConfig()
 		},
 		Options: []fs.Option{{
-			Name:    "is_21vianet_version",
-			Default: false,
-			Help:    "OneDrive operated by 21Vianet (世纪互联 china0sen基于ShadeShady修改).",
-		}, {
 			Name: config.ConfigClientID,
 			Help: "Microsoft App Client Id\nLeave blank normally.",
 		}, {
 			Name: config.ConfigClientSecret,
 			Help: "Microsoft App Client Secret\nLeave blank normally.",
+
+		}, {
+			Name:    "is_21vianet_version",
+			Default: false,
+			Help:    "OneDrive operated by 21Vianet (世纪互联).",
+
 		}, {
 			Name: "chunk_size",
 			Help: `Chunk size to upload files with - must be multiple of 320k (327,680 bytes).
 
-Above this size files will be chunked - must be multiple of 320k (327,680 bytes) and
-should not exceed 250M (262,144,000 bytes) else you may encounter \"Microsoft.SharePoint.Client.InvalidClientQueryException: The request message is too big.\"
-Note that the chunks will be buffered into memory.`,
+Above this size files will be chunked - must be multiple of 320k (327,680 bytes). Note
+that the chunks will be buffered into memory.`,
 			Default:  defaultChunkSize,
 			Advanced: true,
 		}, {
@@ -441,7 +442,7 @@ func (f *Fs) Features() *fs.Features {
 	return f.features
 }
 
-// parsePath parses a one drive 'url'
+// parsePath parses an one drive 'url'
 func parsePath(path string) (root string) {
 	root = strings.Trim(path, "/")
 	return
@@ -637,6 +638,7 @@ func NewFs(name, root string, m configmap.Mapper) (fs.Fs, error) {
 	if opt.DriveID == "" || opt.DriveType == "" {
 		return nil, errors.New("unable to get drive_id and drive_type - if you are upgrading from older versions of rclone, please run `rclone config` and re-configure this backend")
 	}
+
 	rootURL := graphAPIEndpoint + "/v1.0" + "/drives/" + opt.DriveID
 	oauthConfig.Endpoint = *oauthEndpoint
 	if opt.Is21Vianet {
@@ -659,9 +661,8 @@ func NewFs(name, root string, m configmap.Mapper) (fs.Fs, error) {
 		opt:       *opt,
 		driveID:   opt.DriveID,
 		driveType: opt.DriveType,
-		//srv:       rest.NewClient(oAuthClient).SetRoot(graphURL + "/drives/" + opt.DriveID),
-		srv:   rest.NewClient(oAuthClient).SetRoot(rootURL),
-		pacer: fs.NewPacer(pacer.NewDefault(pacer.MinSleep(minSleep), pacer.MaxSleep(maxSleep), pacer.DecayConstant(decayConstant))),
+		srv:       rest.NewClient(oAuthClient).SetRoot(rootURL),
+		pacer:     fs.NewPacer(pacer.NewDefault(pacer.MinSleep(minSleep), pacer.MaxSleep(maxSleep), pacer.DecayConstant(decayConstant))),
 	}
 	f.features = (&fs.Features{
 		CaseInsensitive:         true,
@@ -1080,13 +1081,10 @@ func (f *Fs) Copy(ctx context.Context, src fs.Object, remote string) (fs.Object,
 		return nil, err
 	}
 
-	// Check we aren't overwriting a file on the same remote
-	if srcObj.fs == f {
-		srcPath := srcObj.rootPath()
-		dstPath := f.rootPath(remote)
-		if strings.ToLower(srcPath) == strings.ToLower(dstPath) {
-			return nil, errors.Errorf("can't copy %q -> %q as are same name when lowercase", srcPath, dstPath)
-		}
+	srcPath := srcObj.rootPath()
+	dstPath := f.rootPath(remote)
+	if strings.ToLower(srcPath) == strings.ToLower(dstPath) {
+		return nil, errors.Errorf("can't copy %q -> %q as are same name when lowercase", srcPath, dstPath)
 	}
 
 	// Create temporary object
@@ -1365,7 +1363,7 @@ func (f *Fs) Hashes() hash.Set {
 	return hash.Set(QuickXorHashType)
 }
 
-// PublicLink returns a link for downloading without account.
+// PublicLink returns a link for downloading without accout.
 func (f *Fs) PublicLink(ctx context.Context, remote string) (link string, err error) {
 	info, _, err := f.readMetaDataForPath(ctx, f.rootPath(remote))
 	if err != nil {
@@ -1919,8 +1917,8 @@ func newOptsCall(normalizedID string, method string, route string) (opts rest.Op
 func parseNormalizedID(ID string) (string, string, string) {
 	if strings.Index(ID, "#") >= 0 {
 		s := strings.Split(ID, "#")
-		//return s[1], s[0], graphAPIEndpoint + "/drives"
 		return s[1], "", ""
+
 	}
 	return ID, "", ""
 }
