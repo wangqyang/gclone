@@ -1,15 +1,15 @@
 package main
 
 import (
-	_ "github.com/jonntd/gclone/backend/all" // import all backends
 	"github.com/rclone/rclone/cmd"
-	_ "github.com/jonntd/gclone/cmd/copy"
-	_ "github.com/rclone/rclone/cmd/all"    // import all commands
+	_ "github.com/rclone/rclone/cmd/all" // import all commands
 	"github.com/rclone/rclone/fs"
-	_ "github.com/rclone/rclone/lib/plugin" // import plugins
+	_ "github.com/rclone/rclone/lib/plugin"     // import plugins
+	_ "github.com/wangqyang/gclone/backend/all" // import all backends
+	_ "github.com/wangqyang/gclone/cmd/copy"
 )
 
 func main() {
-	fs.Version = fs.Version+"-mod1.3.1"
+	fs.Version = fs.Version+"-mod"
 	cmd.Main()
 }
