@@ -50,3 +50,11 @@ rclone:
 	mkdir -p `go env GOPATH`/bin/
 	cp -av rclone`go env GOEXE` `go env GOPATH`/bin/rclone`go env GOEXE`.new
 	mv -v `go env GOPATH`/bin/rclone`go env GOEXE`.new `go env GOPATH`/bin/rclone`go env GOEXE`
+	
+vars:
+	@echo SHELL="'$(SHELL)'"
+	@echo BRANCH="'$(BRANCH)'"
+	@echo TAG="'$(TAG)'"
+	@echo VERSION="'$(VERSION)'"
+	@echo GO_VERSION="'$(GO_VERSION)'"
+	@echo BETA_URL="'$(BETA_URL)'"	
