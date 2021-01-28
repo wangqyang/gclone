@@ -122,8 +122,8 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
-          tag_name: 1.55
-          release_name: 1.55
+          tag_name: 1.52.3-mod
+          release_name: 1.52.3-mod
           draft: false
           prerelease: false
       - name: Upload Release Asset
