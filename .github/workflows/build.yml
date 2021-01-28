@@ -1,8 +1,5 @@
----
-# Github Actions build for rclone
-# -*- compile-command: "yamllint -f parsable build.yml" -*-
 
-name: build
+name: windows
 
 # Trigger the workflow on push or pull request
 on:
@@ -10,7 +7,7 @@ on:
     branches:
       - '*'
     tags:
-      - 'v*'
+      - '*'
   pull_request:
 
 jobs:
