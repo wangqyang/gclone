@@ -2,7 +2,6 @@ package all
 
 import (
 	// Active file systems
-	/*
 	_ "github.com/rclone/rclone/backend/alias"
 	_ "github.com/rclone/rclone/backend/amazonclouddrive"
 	_ "github.com/rclone/rclone/backend/azureblob"
@@ -37,7 +36,6 @@ import (
 	_ "github.com/rclone/rclone/backend/union"
 	_ "github.com/rclone/rclone/backend/webdav"
 	_ "github.com/rclone/rclone/backend/yandex"
-	*/
 	_ "github.com/rclone/rclone/backend/sftp"
 	_ "github.com/wangqyang/gclone/backend/drive"  // google drive
 	_ "github.com/wangqyang/gclone/backend/onedrive"   // onedrive
